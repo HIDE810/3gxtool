@@ -1,0 +1,5 @@
+/build
+*.exe
+*.3gx
+*.elf
+*.plgInfo
