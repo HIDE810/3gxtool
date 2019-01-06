@@ -36,11 +36,12 @@ void    CheckOptions(int& argc, const char **argv)
     {
       std::cout <<  " - Builds plugin files to be used by Luma3DS\n" \
                     "Usage:\n"
-                <<  argv[0] << " [OPTION...] <input.bin> <settings.plgInfo> <output.3dsgx>" << std::endl;
+                <<  argv[0] << " [OPTION...] <input.bin> <settings.plgInfo> <output.3gx>" << std::endl;
       exit(0);
     }
 
     g_silentMode = result.count("silent");
+    g_discardSymbols = result.count("discard-symbols");
 }
 
 u32     GetVersion(YAML::Node& settings)
