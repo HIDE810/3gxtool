@@ -1,7 +1,7 @@
 #include "types.hpp"
 #include "3gx.hpp"
 #include "ElfConvert.hpp"
-#include "yaml.h"
+#include <yaml.h>
 #include "cxxopts.hpp"
 #include <iostream>
 #include <fstream>
