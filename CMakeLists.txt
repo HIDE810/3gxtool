@@ -24,8 +24,12 @@ endif()
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/extern/yaml-cpp/CMakeLists.txt")
     message(FATAL_ERROR "The submodules were not downloaded! GIT_SUBMODULE was turned off or failed. Please update submodules and try again.")
 endif()
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/extern/dynalo/CMakeLists.txt")
+    message(FATAL_ERROR "The submodules were not downloaded! GIT_SUBMODULE was turned off or failed. Please update submodules and try again.")
+endif()
 
 add_subdirectory(extern/yaml-cpp)
+add_subdirectory(extern/dynalo)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_EXE_LINKER_FLAGS "-static-libgcc -static-libstdc++ -static")
@@ -36,6 +40,10 @@ include_directories(yaml-cpp/include/yaml-cpp)
 include_directories(yaml-cpp/include/yaml-cpp/contrib)
 include_directories(yaml-cpp/include/yaml-cpp/node)
 include_directories(yaml-cpp/include/yaml-cpp/node/detail)
+include_directories(dynalo/include/dynalo)
+include_directories(dynalo/include/dynalo/detail)
+include_directories(dynalo/include/dynalo/windows)
+include_directories(dynalo/include/dynalo/linux)
 
 add_executable(3gxtool
         includes/3gx.hpp
@@ -49,3 +57,4 @@ add_executable(3gxtool
 
 target_link_libraries(3gxtool PRIVATE yaml-cpp)
 target_include_directories(3gxtool PUBLIC extern/yaml-cpp/include/yaml-cpp)
+target_include_directories(3gxtool PUBLIC extern/dynalo/include/dynalo)

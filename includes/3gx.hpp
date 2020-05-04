@@ -2,7 +2,7 @@
 
 #include "types.hpp"
 
-#define _3GX_MAGIC (0x3130303024584733) /* "3GX$0001" */
+#define _3GX_MAGIC (0x3130303024584734) /* "3GX$0002" */
 
 struct _3gx_Infos
 {
@@ -14,6 +14,17 @@ struct _3gx_Infos
     u32             summaryMsg{0};
     u32             descriptionLen{0};
     u32             descriptionMsg{0};
+    union {
+        u32         flags{0};
+        struct {
+            u32     needsExeDecryptFunc : 1;
+            u32     needsSwapEncDecFunc : 1;
+            u32     embeddedExeDecryptFunc : 1;
+            u32     embeddedSwapEncDecFunc : 1;
+            u32     unused : 28;
+        };
+    };
+    u32             exeDecChecksum{0};
 } PACKED;
 
 struct _3gx_Targets
@@ -57,21 +68,25 @@ struct _3gx_Symtable
 
 struct _3gx_Executable
 {
-    u32             codeSize{0};
     u32             codeOffset{0};
-    u32             rodataSize{0};
     u32             rodataOffset{0};
-    u32             dataSize{0};
     u32             dataOffset{0};
+    u32             codeSize{0};
+    u32             rodataSize{0};
+    u32             dataSize{0};
     u32             bssSize{0};
+    u32             exeDecOffset{0}; // NOP terminated
+    u32             swapEncOffset{0}; // NOP terminated
+    u32             swapDecOffset{0}; // NOP terminated
 } PACKED;
 
 struct _3gx_Header
 {
     u64             magic{_3GX_MAGIC};
     u32             version{0};
-    _3gx_Executable executable{};
-    _3gx_Symtable   symtable{};
+    u32             reserved{0};
     _3gx_Infos      infos{};
+    _3gx_Executable executable{};
     _3gx_Targets    targets{};
+    _3gx_Symtable   symtable{};
 } PACKED;
