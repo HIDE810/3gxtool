@@ -2,7 +2,7 @@
 
 #include "types.hpp"
 
-#define _3GX_MAGIC (0x3130303024584734) /* "3GX$0002" */
+#define _3GX_MAGIC (0x3230303024584733) /* "3GX$0002" */
 
 struct _3gx_Infos
 {
@@ -17,14 +17,14 @@ struct _3gx_Infos
     union {
         u32         flags{0};
         struct {
-            u32     needsExeDecryptFunc : 1;
-            u32     needsSwapEncDecFunc : 1;
             u32     embeddedExeDecryptFunc : 1;
             u32     embeddedSwapEncDecFunc : 1;
-            u32     unused : 28;
+            u32     unused : 30;
         };
     };
     u32             exeDecChecksum{0};
+    u32             builtInDecExeArgs[4]{0};
+    u32             builtInSwapEncDecArgs[4]{0};
 } PACKED;
 
 struct _3gx_Targets
