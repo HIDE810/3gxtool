@@ -1,9 +1,37 @@
 #include "ElfConvert.hpp"
+#include <dynalo.hpp>
 #include <cstring>
 #include <algorithm>
 
 #define die(msg) { throw std::runtime_error(msg) ; }
 #define safe_call(a) do { int rc = a; if(rc != 0) return rc; } while(0)
+
+extern std::string                 g_enclibpath;
+
+                                /*push {r6, r7, lr}
+                                mov r7, #0
+                                loop:
+                                ldr r6, [r0], #4
+                                add r7, r7, r6
+                                cmp r0, r1
+                                bne loop
+                                mov r0, r7
+                                pop {r6, r7, pc}
+                                nop*/
+static const u8 defaultFunc[] =   {0xC0, 0x40, 0x2D, 0xE9, 0x00, 0x70, 0xA0, 0xE3, 0x04, 0x60, 0x90, 0xE4, 0x06, 0x70, 0x87, 0xE0,
+                                0x01, 0x00, 0x50, 0xE1, 0xFB, 0xFF, 0xFF, 0x1A, 0x07, 0x00, 0xA0, 0xE1, 0xC0, 0x80, 0xBD, 0xE8, 
+                                0x00, 0xF0, 0x20, 0xE3};
+
+static u32 defaultFuncExec(void* data, u32 sizeBytes, u32 params[4]) {
+    u32 ret = 0;
+    u32* d = (u32*)data;
+    u32* e = d + (sizeBytes / sizeof(u32));
+    while (d < e) ret += *d++;
+    return ret;
+}
+
+// Cannot be placed in the hpp file as dynalo can only be used on a single file
+dynalo::library* _encLib{nullptr};
 
 ElfConvert::ElfConvert(const std::string &elfPath)
 {
@@ -108,10 +136,18 @@ ElfConvert::~ElfConvert(void)
 {
     if (_img)
         delete[] _img;
+    if (_binaryBuff)
+        delete[] _binaryBuff;
+    if (_encLib)
+    {
+        delete _encLib;
+        _encLib = nullptr;
+    }
 }
 
 void    ElfConvert::WriteToFile(_3gx_Header& header, std::ofstream& outFile, bool writeSymbols)
 {
+    _3gx_Infos&         infos = header.infos;
     _3gx_Executable&    exec = header.executable;
     _3gx_Symtable&      symb = header.symtable;
 
@@ -120,26 +156,79 @@ void    ElfConvert::WriteToFile(_3gx_Header& header, std::ofstream& outFile, boo
     exec.rodataSize = _rodataSegSize;
     exec.dataSize = _dataSegSize;
     exec.bssSize = _bssSize;
-
+        
+    if (!g_enclibpath.empty()) {
+        _encLib = new dynalo::library(g_enclibpath);
+    }
+    
+    // I could use _img directly, but I prefer not messing up something that I didn't make nor understand :P
+    _binaryBuff = new uint8_t[_codeSegSize + _rodataSegSize + _dataSegSize];
+    memcpy(_binaryBuff, _codeSeg, _codeSegSize);
+    memcpy(_binaryBuff + _codeSegSize, _rodataSeg, _rodataSegSize);
+    memcpy(_binaryBuff + _codeSegSize + _rodataSegSize, _dataSeg, _dataSegSize);
+    
+    u32 exeparams[4] = {0}, swapparams[4] = {0};
+    u32 decExePayload[32] = {0}, decSwapPayload[32] = {0}, encSwapPayload[32] = {0};
+    
+    if (_encLib) { // Load the encrypt/decript lib
+        auto encfunc = _encLib->get_function<uint32_t(void*, uint32_t, uint32_t[4])>("encrypt");
+        auto embeddedDecFunc = _encLib->get_function<bool(uint32_t[32], uint32_t[4])>("decryptPayload");
+        auto embeddedSwapEncDecFunc = _encLib->get_function<bool(uint32_t[32], uint32_t[32], uint32_t[4])>("encryptDecryptSwapPayload");
+        
+        infos.embeddedExeDecryptFunc = embeddedDecFunc(decExePayload, exeparams);
+        infos.exeDecChecksum = encfunc(_binaryBuff, _codeSegSize + _rodataSegSize + _dataSegSize, exeparams);
+        infos.embeddedSwapEncDecFunc = embeddedSwapEncDecFunc(encSwapPayload, decSwapPayload, swapparams);
+    } else { // Use the default lib to get the checksum
+        memcpy(decExePayload, defaultFunc, sizeof(defaultFunc));
+        memcpy(decSwapPayload, defaultFunc, sizeof(defaultFunc));
+        memcpy(encSwapPayload, defaultFunc, sizeof(defaultFunc));
+        infos.embeddedExeDecryptFunc = infos.embeddedSwapEncDecFunc = 1;
+        infos.exeDecChecksum = defaultFuncExec(_binaryBuff, _codeSegSize + _rodataSegSize + _dataSegSize, exeparams);
+    }
+    if (infos.embeddedExeDecryptFunc) {
+        memcpy(infos.builtInDecExeArgs, exeparams, sizeof(infos.builtInDecExeArgs));
+        exec.exeDecOffset = static_cast<u32>(outFile.tellp());
+        u32 payloadSize = 1;
+        for (; payloadSize <= (sizeof(decExePayload) / sizeof(u32)); payloadSize++) if (decExePayload[payloadSize-1] == 0xE320F000) break;
+        if (payloadSize > (sizeof(decExePayload) / sizeof(u32))) die("Decryption payload is too long or not \"NOP\" terminated.");
+        outFile.write((char*)decExePayload, payloadSize*sizeof(u32));
+        outFile.flush();
+    }
+    if (infos.embeddedExeDecryptFunc) {
+        memcpy(infos.builtInSwapEncDecArgs, swapparams, sizeof(infos.builtInSwapEncDecArgs));
+        exec.swapEncOffset = static_cast<u32>(outFile.tellp());
+        u32 payloadSize = 1;
+        for (; payloadSize <= (sizeof(encSwapPayload) / sizeof(u32)); payloadSize++) if (encSwapPayload[payloadSize-1] == 0xE320F000) break;
+        if (payloadSize > (sizeof(encSwapPayload) / sizeof(u32))) die("Swap ecryption payload is too long or not \"NOP\" terminated.");
+        outFile.write((char*)encSwapPayload, payloadSize*sizeof(u32));
+        outFile.flush();
+        exec.swapDecOffset = static_cast<u32>(outFile.tellp());
+        payloadSize = 1;
+        for (; payloadSize <= (sizeof(decSwapPayload) / sizeof(u32)); payloadSize++) if (decSwapPayload[payloadSize-1] == 0xE320F000) break;
+        if (payloadSize > (sizeof(decSwapPayload) / sizeof(u32))) die("Swap decryption payload is too long or not \"NOP\" terminated.");
+        outFile.write((char*)decSwapPayload, payloadSize*sizeof(u32));
+        outFile.flush();
+    }
+    
     // Write code to file
     exec.codeOffset = static_cast<u32>(outFile.tellp());
-    { // Make the offset in file 8 bytes aligned
-        u32 padding = 8 - (exec.codeOffset & 7);
-        char zeroes[8] = {0};
+    { // Make the offset in file 16 bytes aligned
+        u32 padding = 16 - (exec.codeOffset & 0xF);
+        char zeroes[16] = {0};
         outFile.write(zeroes, padding);
         exec.codeOffset += padding;
     }
-    outFile.write(_codeSeg, _codeSegSize);
+    outFile.write((char*)_binaryBuff, _codeSegSize);
     outFile.flush();
 
     // Write rodata to file
     exec.rodataOffset = static_cast<u32>(outFile.tellp());
-    outFile.write(_rodataSeg, _rodataSegSize);
+    outFile.write((char*)_binaryBuff + _codeSegSize, _rodataSegSize);
     outFile.flush();
 
     // Write data to file
     exec.dataOffset = static_cast<u32>(outFile.tellp());
-    outFile.write(_dataSeg, _dataSegSize);
+    outFile.write((char*)_binaryBuff + _codeSegSize + _rodataSegSize, _dataSegSize);
     outFile.flush();
 
     if (!writeSymbols)
