@@ -1,6 +1,7 @@
 #include "ElfConvert.hpp"
 #include <dynalo.hpp>
 #include <cstring>
+#include <iostream>
 #include <algorithm>
 
 #define die(msg) { throw std::runtime_error(msg) ; }
@@ -123,8 +124,8 @@ ElfConvert::ElfConvert(const std::string &elfPath)
         _topAddr = s.memPos + s.memSize + ((s.memSize & 3) ? 4 - (s.memSize & 3) : 0);
     }
 
-    if ((_topAddr - _baseAddr) >= 0x100000)
-        die("The executable must not be bigger than 1 MiB!");
+    if ((_topAddr - _baseAddr) >= 0x200000)
+        std::cout << "WARNING: The executable is bigger than 2 MiB! Only 3 MiB are left for heap memory, plugin may be unstable!" << std::endl;
 
     if (le_word(elfHdr->e_entry) != _baseAddr)
         die("Entrypoint should be zero!");
