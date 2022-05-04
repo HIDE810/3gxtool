@@ -4,7 +4,6 @@
 #include "types.hpp"
 #include "elf.hpp"
 #include "3gx.hpp"
-
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -29,8 +28,9 @@ public:
     void    WriteToFile(_3gx_Header& header, std::ofstream& outFile, bool writeSymbols);
 
 private:
-
+    
     char *          _img{nullptr};
+    uint8_t*        _binaryBuff{nullptr};
     int             _platFlags{0};
 
     Elf32_Shdr*     _elfSects{nullptr};

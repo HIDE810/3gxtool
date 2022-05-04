@@ -17,6 +17,7 @@ static std::string          g_title;
 static std::string          g_summary;
 static std::string          g_description;
 static std::vector<u32>     g_targets;
+std::string                 g_enclibpath{""};
 
 #define MAKE_VERSION(major, minor, revision) \
     (((major)<<24)|((minor)<<16)|((revision)<<8))
@@ -28,6 +29,7 @@ void    CheckOptions(int& argc, const char **argv)
     options.add_options()
         ("d,discard-symbols", "Don't include the symbols in the file")
         ("s,silent", "Don't display the text (except errors)")
+        ("e,enclib", "Encryption shared library", cxxopts::value<std::string>())
         ("h,help", "Print help");
 
     auto result = options.parse(argc, argv);
@@ -42,6 +44,9 @@ void    CheckOptions(int& argc, const char **argv)
 
     g_silentMode = result.count("silent");
     g_discardSymbols = result.count("discard-symbols");
+    
+    if (result.count("enclib"))
+        g_enclibpath = result["enclib"].as<std::string>();
 }
 
 u32     GetVersion(YAML::Node& settings)
@@ -91,6 +96,7 @@ void    GetTitles(YAML::Node& settings)
 
 int     main(int argc, const char **argv)
 {
+    int ret = 0;
     try
     {
         CheckOptions(argc, argv);
@@ -106,15 +112,16 @@ int     main(int argc, const char **argv)
                 std::cout   <<  " - Builds plugin files to be used by Luma3DS\n" \
                                 "Usage:\n"
                             <<  argv[0] << " [OPTION...] <input.bin> <settings.plgInfo> <output.3gx>" << std::endl;
-            return -1;
+            ret = -1;
+            goto exit;
         }
 
-        _3gx_Header     header;
-        ElfConvert      elfConvert(argv[1]);
-        YAML::Node      settings;
-        std::ifstream   settingsFile;
-        std::ifstream   codeFile;
-        std::ofstream   outputFile;
+        _3gx_Header         header;
+        ElfConvert          elfConvert(argv[1]);
+        YAML::Node          settings;
+        std::ifstream       settingsFile;
+        std::ifstream       codeFile;
+        std::ofstream       outputFile;
 
         // Open files
         settingsFile.open(argv[2], std::ios::in);
@@ -123,13 +130,15 @@ int     main(int argc, const char **argv)
         if (!settingsFile.is_open())
         {
             std::cerr << "couldn't open: " << argv[2] << std::endl;
-            return -1;
+            ret = -1;
+            goto exit;
         }
 
         if (!outputFile.is_open())
         {
             std::cerr << "couldn't open: " << argv[3] << std::endl;
-            return -1;
+            ret = -1;
+            goto exit;
         }
 
         if (!g_silentMode)
@@ -210,7 +219,9 @@ int     main(int argc, const char **argv)
     {
         remove(argv[3]);
         std::cerr << "An exception occured: " << e.what() << std::endl;
-        return -1;
+        ret = -1;
+        goto exit;
     }
-    return 0;
+exit:
+    return ret;
 }
