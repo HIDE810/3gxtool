@@ -28,6 +28,10 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/extern/dynalo/CMakeLists.txt")
     message(FATAL_ERROR "The submodules were not downloaded! GIT_SUBMODULE was turned off or failed. Please update submodules and try again.")
 endif()
 
+set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+set(YAML_CPP_INSTALL OFF CACHE BOOL "" FORCE)
+
 add_subdirectory(extern/yaml-cpp)
 add_subdirectory(extern/dynalo)
 
@@ -55,6 +59,6 @@ add_executable(3gxtool
         sources/main.cpp
         )
 
-target_link_libraries(3gxtool PRIVATE yaml-cpp)
+target_link_libraries(3gxtool PRIVATE yaml-cpp ${CMAKE_DL_LIBS})
 target_include_directories(3gxtool PUBLIC extern/yaml-cpp/include/yaml-cpp)
 target_include_directories(3gxtool PUBLIC extern/dynalo/include/dynalo)
