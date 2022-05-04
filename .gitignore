@@ -1,4 +1,5 @@
 /build
+/Build
 *.exe
 *.3gx
 *.elf
